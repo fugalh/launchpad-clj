@@ -22,3 +22,7 @@
   (light m x y 0))
 
 (defn reset [m] (midi-control m 0 0))
+
+  (defn all-on "brightness is 1, 2 or 3"
+    [m brightness]
+    (midi-control m 0 (+ 124 brightness)))
