@@ -4,8 +4,6 @@
   (:require [overtone.studio.midi :as midi]
             [overtone.midi :as midi0]))
 
-(def foo "1244")
-
 (defn find-launchpad
   "Find the first connected Launchpad"
   []
