@@ -17,3 +17,6 @@
    m
    (+ x (* 0x10 y))
    c))
+
+(defn unlight [m x y]
+  (light m x y 0))
