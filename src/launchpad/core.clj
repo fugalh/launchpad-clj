@@ -20,3 +20,5 @@
 
 (defn unlight [m x y]
   (light m x y 0))
+
+(defn reset [m] (midi-control m 0 0))
