@@ -59,6 +59,11 @@
   "Light right button 0-7"
   [m n col]
   (light m 8 n col))
+
 ;; That should do it. There's more about intensity (wishlist) and about
 ;; double buffering and other tricks for more efficient updates, which I
 ;; may utilize when doing react-style
+
+;; well actually I should do input handling too. but in the context of
+;; the richer api, because we have to at least keep track of the event
+;; handlers.
