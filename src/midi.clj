@@ -1,6 +1,7 @@
 (ns midi
   (:import (javax.sound.midi MidiSystem
-                             ShortMessage)))
+                             ShortMessage))
+  (:refer-clojure :exclude [send]))
 
 (defn note-on
   "Make a note-on midi message, suitable to send to a receiver."

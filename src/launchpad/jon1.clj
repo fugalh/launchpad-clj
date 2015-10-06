@@ -1,7 +1,6 @@
 (ns jon1
   (:require [launchpad.core :as launchpad]))
-;(use 'launchpad.core)
-(def lp (launchpad/find-launchpad))
+(def lp (launchpad/get-launchpad))
 (def red (launchpad/mk-color 3 0))
 (def green (launchpad/mk-color 0 3))
 (def amber (launchpad/mk-color 3 3))
