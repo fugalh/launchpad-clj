@@ -45,3 +45,9 @@
 (defn send
   "Send a message to a receiver"
   [rx msg] (.send rx msg -1))
+
+
+;; TODO
+;; Looks like this works great in linux! test in windows
+;; Linux even sees the new device when you plug in. sweet. guess that's an osx bug
+;; Has a different name in linux, but "Launchpad" is still in the description. so probably need to do the "name or description" thing.
