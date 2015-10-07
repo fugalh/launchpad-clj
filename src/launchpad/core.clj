@@ -1,70 +1,72 @@
-;; Launchpad S and Launchpad Mini
-
 (ns launchpad.core
   (:require midi))
 
-(declare reset)
+(defn- color->velocity [[red green]]
+  (bit-or red
+          0xC
+          (bit-shift-left green 4)))
 
-(defn get-launchpad
-  "Find and initialize the first connected Launchpad"
-  []
-  (let [lp (midi/get-receiver "Launchpad")]
-    (do (reset lp) lp)))
+(defn- coord->note [[x y]]
+  (+ x
+     (* 0x10 y)))
 
-(defn mk-color
-  "Make a color. red and green range from 0 to 3"
-  [r g]
-  (bit-or
-   r
-   0xC
-   (bit-shift-left g 4)))
+(defprotocol ModelBehavior
+  (render [this])
+  (reset [this])
+  (grid [this [x y] [red green]])
+  (top [this x [red green]])
+  (side [this y [red green]]))
 
-(defn light
-  "light a pad at x,y (0,0 is top-left). Use mk-color for c"
-  [m x y c]
-  (midi/send m (midi/note-on
-                 (+ x (* 0x10 y))
-                 c)))
+(defrecord State [grid top side])
+(defrecord Model [state device]
+  ModelBehavior
+  (grid [this [x y] [red green]]
+    (let [state (.state this)]
+      (swap! state assoc-in [:grid x y] [red green])))
+  (top [this x [red green]]
+    (let [state (.state this)]
+      (swap! state assoc-in [:top x] [red green])))
+  (side [this y [red green]]
+    (let [state (.state this)]
+      (swap! state assoc-in [:side y] [red green])))
+  (render [this]
+    ;; TODO more efficient
+    (let [state @(.state this)
+          dev (.device this)]
+      (dotimes [x 8]
+        (dotimes [y 8]
+          (.send dev
+             (midi/note-on (coord->note [x y])
+                           (color->velocity (get-in state [:grid x y])))
+             -1))
+        (.send dev
+           (midi/control-change (+ 0x68 x)
+                 (color->velocity (get-in state [:top x])))
+           -1)
+        (.send dev
+           (midi/note-on (coord->note [8 x])
+                 (color->velocity (get-in state [:side x])))
+           -1))))
+  (reset [this]
+    (do 
+      (swap! (.state this) (fn [_] (make-state)))
+      (.render this))))
 
-(defn unlight
-  "unlight a pad"
-  [m x y]
-  (light m x y 0))
+(defn make-state []
+  (State. (vec (repeat 8 (vec (repeat 8 [0 0]))))
+         (vec (repeat 8 [0 0]))
+         (vec (repeat 8 [0 0]))))
 
-(defn reset
-  "reset the launchpad"
-  [m] (midi/send m (midi/control-change 0 0)))
+(defn make-model []
+  (Model. (atom (make-state))
+          (midi/get-receiver "Launchpad")))
 
-(defn all-on
-  "brightness is 1, 2 or 3"
-  [m brightness]
-  (midi/send m (midi/control-change 0 (+ 124 brightness))))
+(defn make-test-model []
+  (Model. (atom (make-state))
+          (reify javax.sound.midi.Receiver
+            (close [this])
+            (send [this msg ts]))))
 
-;; afaict this should work but I don't see any sysex sent with midi monitor,
-;; so it might be an overtone bug.
-;(defn text
-;  [m color byte-seq]
-;  (midi/midi-sysex m [240 0 32 41 9 color byte-seq 0xf7]))
-
-;(defn clear-text
-;  "If text is looping (add 64 to color to loop), reset it"
-;  [m]
-;  (midi/midi-sysex m [240, 0, 32, 41, 9, 0, 247]))
-
-(defn top-button
-  "Light button 0-7"
-  [m n col]
-  (midi/send m (midi/control-change (+ 0x68 n) col)))
-
-(defn right-button
-  "Light right button 0-7"
-  [m n col]
-  (light m 8 n col))
-
-;; That should do it. There's more about intensity (wishlist) and about
-;; double buffering and other tricks for more efficient updates, which I
-;; may utilize when doing react-style
-
-;; well actually I should do input handling too. but in the context of
-;; the richer api, because we have to at least keep track of the event
-;; handlers.
+;; wip - grid/top/side in terms of updating state and calling render
+;; then make render more efficient (only render differences)
+;; and don't forget to reset and render initial state
