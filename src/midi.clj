@@ -1,6 +1,7 @@
 (ns midi
   (:import (javax.sound.midi MidiSystem
-                             ShortMessage))
+                             ShortMessage
+                             MidiUnavailableException))
   (:refer-clojure :exclude [send]))
 
 (defn note-on
@@ -25,7 +26,9 @@
   [re]
   (let [infos (MidiSystem/getMidiDeviceInfo)]
     (map #(MidiSystem/getMidiDevice %)
-         (filter #(re-find (re-pattern re) (.getName %))
+         (filter (or
+                  #(re-find (re-pattern re) (.getName %))
+                  #(re-find (re-pattern re) (.getDescription %)))
                  infos))))
 
 (defn get-receiver
@@ -37,10 +40,13 @@
   (let [devices (find-devices re)
         devices (filter #(not (= 0 (.getMaxReceivers %))) devices)
         device (first devices)]
-    (do
-      (when (not (.isOpen device))
-        (.open device))
-      (.getReceiver device))))
+    (when (not device)
+      (throw (MidiUnavailableException.
+              (str "No MIDI receiver matching /" re "/"))))
+    (when (not (.isOpen device))
+      (.open device))
+    (.getReceiver device)))
+      
 
 (defn send
   "Send a message to a receiver"
