@@ -1,3 +1,17 @@
+;; There's overtone.midi but I had trouble with it not finding devices on
+;; non-OSX platforms. So I decided to build this from Java first-principles
+;; while debugging (I thought it was a Java thing generally, but apparently
+;; it's an overtone.midi bug)
+;;
+;; Also, I didn't like the inconsistent naming (midi- prefix or not?). I
+;; like namespaces to do the work of namespacing, I'm kind of weird that way.
+;;
+;; On OSX, Java permanently caches the results of the midi scan the first
+;; time MidiSystem/getMidiDeviceInfo is called, so there is no way for us to
+;; get an updated list of MIDI devices after the JVM starts. Which means
+;; you have to restart the program/repl whenever you change MIDI
+;; configuration. :-/
+
 (ns midi
   (:import (javax.sound.midi MidiSystem
                              ShortMessage
@@ -51,9 +65,3 @@
 (defn send
   "Send a message to a receiver"
   [rx msg] (.send rx msg -1))
-
-
-;; TODO
-;; Looks like this works great in linux! test in windows
-;; Linux even sees the new device when you plug in. sweet. guess that's an osx bug
-;; Has a different name in linux, but "Launchpad" is still in the description. so probably need to do the "name or description" thing.
