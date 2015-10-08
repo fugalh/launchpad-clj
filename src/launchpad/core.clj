@@ -11,26 +11,36 @@
      (* 0x10 y)))
 
 (defprotocol ModelBehavior
-  (render [this])
+  (render [this newstate])
   (reset [this])
   (grid [this [x y] [red green]])
   (top [this x [red green]])
   (side [this y [red green]]))
 
+(declare make-state)
+
 (defrecord State [grid top side])
+
 (defrecord Model [state device]
   ModelBehavior
   (grid [this [x y] [red green]]
-    (let [state (.state this)]
-      (swap! state assoc-in [:grid x y] [red green])))
+    (.render this (assoc-in @(.state this)
+                         [:grid x y]
+                         [red green])))
+
   (top [this x [red green]]
-    (let [state (.state this)]
-      (swap! state assoc-in [:top x] [red green])))
+    (.render this (assoc-in @(.state this)
+                         [:top x]
+                         [red green])))
+
   (side [this y [red green]]
-    (let [state (.state this)]
-      (swap! state assoc-in [:side y] [red green])))
-  (render [this]
+    (.render this (assoc-in @(.state this)
+                         [:side y]
+                         [red green])))
+
+  (render [this newstate]
     ;; TODO more efficient
+    (reset! (.state this) newstate)
     (let [state @(.state this)
           dev (.device this)]
       (dotimes [x 8]
@@ -47,19 +57,22 @@
            (midi/note-on (coord->note [8 x])
                  (color->velocity (get-in state [:side x])))
            -1))))
-  (reset [this]
-    (do 
-      (swap! (.state this) (fn [_] (make-state)))
-      (.render this))))
 
-(defn make-state []
-  (State. (vec (repeat 8 (vec (repeat 8 [0 0]))))
+  (reset [this]
+    (.send (.device this) (midi/control-change 0 0) -1)
+    (swap! (.state this) make-state)))
+
+(defn make-state 
+  ([] (State. (vec (repeat 8 (vec (repeat 8 [0 0]))))
          (vec (repeat 8 [0 0]))
          (vec (repeat 8 [0 0]))))
+  ([_] (make-state)))
 
 (defn make-model []
-  (Model. (atom (make-state))
-          (midi/get-receiver "Launchpad")))
+  (let [model (Model. (atom (make-state))
+                     (midi/get-receiver "Launchpad"))]
+    (.reset model)
+    model))
 
 (defn make-test-model []
   (Model. (atom (make-state))
