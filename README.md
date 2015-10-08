@@ -2,10 +2,11 @@
 
 A Clojure library for interacting with a Novation Launchpad.
 
-Tested with a new Launchpad Mini in 2015, which I understand works the same as
-a Launchpad S, but smaller. It may work for an older model Launchpad too, or
-for a Launchpad Pro. If you have one of those and try it, let me know how it
-goes.
+Tested with a new
+[Launchpad Mini](http://global.novationmusic.com/launch/launchpad-mini) in
+2015, which I understand works the same as a Launchpad S, but smaller. It may
+work for an older model Launchpad too, or for a Launchpad Pro. If you have one
+of those and try it, let me know how it goes.
 
 ## Usage
 
