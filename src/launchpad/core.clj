@@ -25,18 +25,18 @@
   ModelBehavior
   (grid [this [x y] [red green]]
     (.render this (assoc-in @(.state this)
-                         [:grid x y]
-                         [red green])))
+                            [:grid x y]
+                            [red green])))
 
   (top [this x [red green]]
     (.render this (assoc-in @(.state this)
-                         [:top x]
-                         [red green])))
+                            [:top x]
+                            [red green])))
 
   (side [this y [red green]]
     (.render this (assoc-in @(.state this)
-                         [:side y]
-                         [red green])))
+                            [:side y]
+                            [red green])))
 
   (render [this newstate]
     ;; TODO more efficient
@@ -46,17 +46,17 @@
       (dotimes [x 8]
         (dotimes [y 8]
           (.send dev
-             (midi/note-on (coord->note [x y])
-                           (color->velocity (get-in state [:grid x y])))
-             -1))
+                 (midi/note-on (coord->note [x y])
+                               (color->velocity (get-in state [:grid x y])))
+                 -1))
         (.send dev
-           (midi/control-change (+ 0x68 x)
-                 (color->velocity (get-in state [:top x])))
-           -1)
+               (midi/control-change (+ 0x68 x)
+                                    (color->velocity (get-in state [:top x])))
+               -1)
         (.send dev
-           (midi/note-on (coord->note [8 x])
-                 (color->velocity (get-in state [:side x])))
-           -1))))
+               (midi/note-on (coord->note [8 x])
+                             (color->velocity (get-in state [:side x])))
+               -1))))
 
   (reset [this]
     (.send (.device this) (midi/control-change 0 0) -1)
@@ -64,13 +64,13 @@
 
 (defn make-state 
   ([] (State. (vec (repeat 8 (vec (repeat 8 [0 0]))))
-         (vec (repeat 8 [0 0]))
-         (vec (repeat 8 [0 0]))))
+              (vec (repeat 8 [0 0]))
+              (vec (repeat 8 [0 0]))))
   ([_] (make-state)))
 
 (defn make-model []
   (let [model (Model. (atom (make-state))
-                     (midi/get-receiver "Launchpad"))]
+                      (midi/get-receiver "Launchpad"))]
     (.reset model)
     model))
 
