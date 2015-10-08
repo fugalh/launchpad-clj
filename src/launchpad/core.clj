@@ -6,22 +6,30 @@
 
 (defprotocol ModelBehavior
   (reset 
-    "Reset the launchpad and update the state to match."
-    [this])
+    [this]
+    "Reset the launchpad and update the state to match.")
   (grid 
+    [this [x y] [red green]]
     "Update the grid at (x,y) to have the given color.
     0-indexing from the top-right.
-    red and green range 0 to 3. Amber is achieved by combining both colors."
-    [this [x y] [red green]])
+    red and green range 0 to 3. Amber is achieved by combining both colors.")
   (top
-    "Update the top row of buttons at x (0-7) to have the given color."
-    [this x [red green]])
+    [this x [red green]]
+    "Update the top row of buttons at x (0-7) to have the given color.")
   (side
-    "Update the side column of buttons at y (0-7) to have the given color."
-    [this y [red green]])
+    [this y [red green]]
+    "Update the side column of buttons at y (0-7) to have the given color.")
+  (text
+    [this ascii [red green]]
+    "Scroll text. Vary the speed by embedding control bytes 1-7 in the string
+    (default speed is 4).")
+  (loop-text
+    [this ascii [red green]]
+    "Scroll text looping, until stop-text")
+  (stop-text [this])
   (update!
-    "Update launchpad to this new state, wholesale."
-    [this newstate]))
+    [this newstate]
+    "Update launchpad to this new state, wholesale."))
 
 ;; grid is a vector of vectors (8x8)
 ;; top is an 8-element vector
@@ -84,7 +92,23 @@
     (.send (.device this)
            (midi/control-change 0 0)
            -1)
-    (reset! (.state this) (make-state))))
+    (reset! (.state this) (make-state)))
+
+  (text [this ascii [red green]]
+    ;; sysex [F0h] 00h, 20h, 29h, 09h, colour, text ..., [F7h]
+    (.send
+       (.device this)
+       (midi/sysex (byte-array (concat [0x00 0x20 0x29 0x09]
+                                       [(color->velocity [red green])]
+                                       (.getBytes ascii))))
+       -1))
+
+  (loop-text [this ascii [red green]]
+    ;; like text but add 64 to color (i.e. green|0x4, because green gets <<4)
+    (.text this ascii [red (bit-or 0x4 green)]))
+
+  (stop-text [this]
+    (.text this "" [0 0])))
 
 (defn make-state 
   "Initial state."
