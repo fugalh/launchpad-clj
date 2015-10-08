@@ -4,18 +4,20 @@ A Clojure library for interacting with a Launchpad.
 
 ## Usage
 
-    (require '[launchpad.core :as lp])
+```clojure
+(require '[launchpad.core :as lp])
 
-    ;; Connect to and initialize the Launchpad
-    (def pad (lp/make-model))
+;; Connect to and initialize the Launchpad
+(def pad (lp/make-model))
 
-    ;; blinkenlights
-    (.grid pad [x y] [red green]) ; light a grid button
-    (.top pad x [red green])      ; light a top-row button
-    (.side pad y [red green])     ; light a side-column button
+;; blinkenlights
+(.grid pad [x y] [red green]) ; light a grid button
+(.top pad x [red green])      ; light a top-row button
+(.side pad y [red green])     ; light a side-column button
 
-    ;; start over
-    (.reset pad)
+;; start over
+(.reset pad)
+```
 
 Colors are `[red green]` where `red` and `green` range from
 0 (off) to 3 (brightest). Red and green mix to yield amber.
