@@ -16,8 +16,7 @@
   (:import (javax.sound.midi MidiSystem
                              ShortMessage
                              SysexMessage
-                             MidiUnavailableException))
-  (:refer-clojure :exclude [send]))
+                             MidiUnavailableException)))
 
 (defn note-on
   "Make a note-on midi message, suitable to send to a receiver."
@@ -70,8 +69,3 @@
     (when (not (.isOpen device))
       (.open device))
     (.getReceiver device)))
-      
-
-(defn send
-  "Send a message to a receiver"
-  [rx msg] (.send rx msg -1))

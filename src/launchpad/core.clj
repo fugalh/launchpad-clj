@@ -53,9 +53,10 @@
                             [red green])))
 
   (side [this y [red green]]
-    (.update! this (assoc-in @(.state this)
+    (let [state @(.state this)]
+      (.update! this (assoc-in state
                             [:side y]
-                            [red green])))
+                            [red green]))))
 
   (update! [this newstate]
     ;; The Launchpad Mini, and probably therefore the S, updates quickly enough
@@ -117,12 +118,13 @@
               (vec (repeat 8 [0 0]))))
   ([_] (make-state)))
 
-(defn make-model []
+(defn make-model 
   "Make a model with initial state, connected to the first Launchpad device found."
-  (let [model (Model. (atom (make-state))
-                      (midi/get-receiver "Launchpad"))]
-    (.reset model)
-    model))
+  ([]
+   (make-model (make-state) (midi/get-receiver "Launchpad")))
+  ([state device]
+   (let [model (Model. (atom state) device)]
+     (.reset model))))
 
 ;; helpers
 (defn color->velocity
