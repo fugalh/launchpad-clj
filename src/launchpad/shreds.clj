@@ -19,3 +19,6 @@
      (dotimes [n 7]
        (wait ms)
        (light lp (+ n 1) row col)))))
+
+;; this is a work in progress, a scratch pad while I figure out the most
+;; chuck-y and clojure-y pattern to use for working with time
