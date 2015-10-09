@@ -19,7 +19,7 @@ of those and try it, let me know how it goes.
 ;; blinkenlights
 (.grid pad [x y] [red green]) ; light a grid button
 (.top pad x [red green])      ; light a top-row button
-(.side pad y [red green])     ; light a side-column button
+(.right pad y [red green])     ; light a right side-column button
 
 ;; start over
 (.reset pad)

@@ -27,14 +27,14 @@
   (dotimes [x 8]
     (f (get-in state [:top x]))))
 
-(defn apply-side [f state]
+(defn apply-right [f state]
   (dotimes [x 8]
-    (f (get-in state [:side x]))))
+    (f (get-in state [:right x]))))
 
 (defn apply-all [f state]
   (apply-grid f state)
   (apply-top f state)
-  (apply-side f state))
+  (apply-right f state))
 
 (deftest initialized
   (apply-all #(is (= [0 0] %)) @state))
@@ -64,14 +64,14 @@
     (is (= [red green]
            (get-in @state [:top x])))))
 
-(deftest side
+(deftest right
   (let [b (rand-button)
         y (:y b)
         red (:red b)
         green (:green b)]
-    (.side pad y [red green])
+    (.right pad y [red green])
     (is (= [red green]
-           (get-in @state [:side y])))))
+           (get-in @state [:right y])))))
 
 (deftest reset-is-one-message
   (.reset pad)
@@ -93,8 +93,8 @@
     (is (= 0x6a (.getData1 m)))
     (is (= 0x1c (.getData2 m)))))
 
-(deftest side-midi
-  (.side pad 7 [1 0])
+(deftest right-midi
+  (.right pad 7 [1 0])
   (let [m (last @(.messages (.device pad)))]
     (is (= 0 (.getChannel m)))
     (is (= 0x90 (.getCommand m)))

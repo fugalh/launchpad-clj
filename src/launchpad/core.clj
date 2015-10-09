@@ -16,9 +16,9 @@
   (top
     [this x [red green]]
     "Update the top row of buttons at x (0-7) to have the given color.")
-  (side
+  (right
     [this y [red green]]
-    "Update the side column of buttons at y (0-7) to have the given color.")
+    "Update the right column of buttons at y (0-7) to have the given color.")
   (text
     [this ascii [red green]]
     "Scroll text. Vary the speed by embedding control bytes 1-7 in the string
@@ -30,11 +30,11 @@
 
 ;; grid is a vector of vectors (8x8)
 ;; top is an 8-element vector
-;; side is an 8-element vector
+;; right is an 8-element vector
 ;;
 ;; In all of the above, the value is a color (2-element vector of red and green
 ;; values, ranging from 0 to 3)
-(defrecord State [grid top side])
+(defrecord State [grid top right])
 (def initial-state
   (let [octet (vec (repeat 8 [0 0]))]
     (State. (vec (repeat 8 octet))
@@ -65,12 +65,12 @@
                  (color->velocity (get-in newstate [:top x])))
            -1))
       (let [y x]
-        (when (not= (get-in @oldstate [:side y])
-                (get-in newstate [:side y]))
+        (when (not= (get-in @oldstate [:right y])
+                (get-in newstate [:right y]))
 
           (.send dev
              (midi/note-on (coord->note [8 y])
-                   (color->velocity (get-in newstate [:side y])))
+                   (color->velocity (get-in newstate [:right y])))
              -1))))
     (reset! oldstate newstate)))
 
@@ -88,10 +88,10 @@
                             [:top x]
                             [red green])))
 
-  (side [this y [red green]]
+  (right [this y [red green]]
     (let [state @(.state this)]
       (-update! this (assoc-in state
-                            [:side y]
+                            [:right y]
                             [red green]))))
 
   (reset [this]
