@@ -2,7 +2,7 @@
   (:require midi))
 
 ;; helpers
-(declare color->velocity coord->note)
+(declare color->velocity coord->note -update!)
 
 (defprotocol Protocol
   (reset 
@@ -35,48 +35,16 @@
 ;; In all of the above, the value is a color (2-element vector of red and green
 ;; values, ranging from 0 to 3)
 (defrecord State [grid top right])
+
 (def initial-state
+  "The quintessentially quiescent Launchpad."
   (let [octet (vec (repeat 8 [0 0]))]
     (State. (vec (repeat 8 octet))
             octet
             octet)))
 
-(defn -update!
-  "Update launchpad to pad new state, wholesale."
-  [pad newstate]
-  ;; The Launchpad Mini, and probably therefore the S, updates quickly enough
-  ;; not to warrant double-buffering here, so I haven't implemented it. But if
-  ;; flickering becomes an issue, that's an option.
-  (let [oldstate (.state pad)
-        dev (.device pad)]
-    (dotimes [x 8]
-      (dotimes [y 8]
-        (when (not= (get-in @oldstate [:grid x y])
-                (get-in newstate [:grid x y]))
-          (.send dev
-             (midi/note-on (coord->note [x y])
-                   (color->velocity (get-in newstate
-                                         [:grid x y])))
-             -1)))
-      (when (not= (get-in @oldstate [:top x])
-              (get-in newstate [:top x]))
-        (.send dev
-           (midi/control-change (+ 0x68 x)
-                 (color->velocity (get-in newstate [:top x])))
-           -1))
-      (let [y x]
-        (when (not= (get-in @oldstate [:right y])
-                (get-in newstate [:right y]))
-
-          (.send dev
-             (midi/note-on (coord->note [8 y])
-                   (color->velocity (get-in newstate [:right y])))
-             -1))))
-    (reset! oldstate newstate)))
-
-
 ;; combine the state, the midi device, and the actions on them
-(defrecord Launchpad [state device]
+(defrecord Launchpad [^clojure.lang.Atom state device]
   Protocol
   (grid [this [x y] [red green]]
     (-update! this (assoc-in @(.state this)
@@ -130,13 +98,49 @@
 
 ;; helpers
 (defn color->velocity
-  ;; convert the (red,green) pair to the appropriate MIDI velocity
+  "Convert the (red,green) pair to the appropriate MIDI velocity"
   [[red green]]
   (bit-or red
           0xC
           (bit-shift-left green 4)))
 
 (defn coord->note [[x y]]
-  ;; convert the (x,y) coordinate to the appropriate MIDI note
+  "Convert the (x,y) coordinate to the appropriate MIDI note"
   (+ x
      (* 0x10 y)))
+
+(defn -update!
+  "Update launchpad to pad new state, wholesale."
+  [pad newstate]
+  ;; The Launchpad Mini, and probably therefore the S, updates quickly enough
+  ;; not to warrant double-buffering here, so I haven't implemented it. But if
+  ;; flickering becomes an issue, that's an option.
+  (let [oldstate (.state pad)
+        dev (.device pad)]
+    (dotimes [x 8]
+      (dotimes [y 8]
+        ; update the grid
+        (when (not= (get-in @oldstate [:grid x y])
+                (get-in newstate [:grid x y]))
+          (.send dev
+             (midi/note-on (coord->note [x y])
+                   (color->velocity (get-in newstate
+                                         [:grid x y])))
+             -1)))
+      ; update the top row
+      (when (not= (get-in @oldstate [:top x])
+              (get-in newstate [:top x]))
+        (.send dev
+           (midi/control-change (+ 0x68 x)
+                 (color->velocity (get-in newstate [:top x])))
+           -1))
+      ; update the right side column
+      (let [y x]
+        (when (not= (get-in @oldstate [:right y])
+                (get-in newstate [:right y]))
+
+          (.send dev
+             (midi/note-on (coord->note [8 y])
+                   (color->velocity (get-in newstate [:right y])))
+             -1))))
+    (reset! oldstate newstate)))
