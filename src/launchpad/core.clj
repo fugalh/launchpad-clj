@@ -4,7 +4,7 @@
 ;; helpers
 (declare color->velocity coord->note)
 
-(defprotocol ModelBehavior
+(defprotocol Protocol
   (reset 
     [this]
     "Reset the launchpad and update the state to match.")
@@ -26,10 +26,7 @@
   (loop-text
     [this ascii [red green]]
     "Scroll text looping, until stop-text")
-  (stop-text [this])
-  (update!
-    [this newstate]
-    "Update launchpad to this new state, wholesale."))
+  (stop-text [this]))
 
 ;; grid is a vector of vectors (8x8)
 ;; top is an 8-element vector
@@ -44,55 +41,58 @@
             octet
             octet)))
 
+(defn -update!
+  "Update launchpad to pad new state, wholesale."
+  [pad newstate]
+  ;; The Launchpad Mini, and probably therefore the S, updates quickly enough
+  ;; not to warrant double-buffering here, so I haven't implemented it. But if
+  ;; flickering becomes an issue, that's an option.
+  (let [oldstate (.state pad)
+        dev (.device pad)]
+    (dotimes [x 8]
+      (dotimes [y 8]
+        (when (not= (get-in @oldstate [:grid x y])
+                (get-in newstate [:grid x y]))
+          (.send dev
+             (midi/note-on (coord->note [x y])
+                   (color->velocity (get-in newstate
+                                         [:grid x y])))
+             -1)))
+      (when (not= (get-in @oldstate [:top x])
+              (get-in newstate [:top x]))
+        (.send dev
+           (midi/control-change (+ 0x68 x)
+                 (color->velocity (get-in newstate [:top x])))
+           -1))
+      (let [y x]
+        (when (not= (get-in @oldstate [:side y])
+                (get-in newstate [:side y]))
+
+          (.send dev
+             (midi/note-on (coord->note [8 y])
+                   (color->velocity (get-in newstate [:side y])))
+             -1))))
+    (reset! oldstate newstate)))
+
+
 ;; combine the state, the midi device, and the actions on them
-(defrecord Model [state device]
-  ModelBehavior
+(defrecord Launchpad [state device]
+  Protocol
   (grid [this [x y] [red green]]
-    (.update! this (assoc-in @(.state this)
+    (-update! this (assoc-in @(.state this)
                             [:grid x y]
                             [red green])))
 
   (top [this x [red green]]
-    (.update! this (assoc-in @(.state this)
+    (-update! this (assoc-in @(.state this)
                             [:top x]
                             [red green])))
 
   (side [this y [red green]]
     (let [state @(.state this)]
-      (.update! this (assoc-in state
+      (-update! this (assoc-in state
                             [:side y]
                             [red green]))))
-
-  (update! [this newstate]
-    ;; The Launchpad Mini, and probably therefore the S, updates quickly enough
-    ;; not to warrant double-buffering here, so I haven't implemented it. But if
-    ;; flickering becomes an issue, that's an option.
-    (let [oldstate (.state this)
-          dev (.device this)]
-      (dotimes [x 8]
-        (dotimes [y 8]
-          (when (not= (get-in @oldstate [:grid x y])
-                      (get-in newstate [:grid x y]))
-            (.send dev
-                   (midi/note-on (coord->note [x y])
-                                 (color->velocity (get-in newstate
-                                                          [:grid x y])))
-                   -1)))
-        (when (not= (get-in @oldstate [:top x])
-                    (get-in newstate [:top x]))
-          (.send dev
-                 (midi/control-change (+ 0x68 x)
-                                      (color->velocity (get-in newstate [:top x])))
-                 -1))
-        (let [y x]
-          (when (not= (get-in @oldstate [:side y])
-                      (get-in newstate [:side y]))
-            
-            (.send dev
-                   (midi/note-on (coord->note [8 y])
-                                 (color->velocity (get-in newstate [:side y])))
-                   -1))))
-      (reset! oldstate newstate)))
 
   (reset [this]
     (.send (.device this)
@@ -116,15 +116,17 @@
   (stop-text [this]
     (.text this "" [0 0])))
 
-(defn new-model 
+(defn new-launchpad 
   ([]
-   (new-model initial-state (midi/get-receiver "Launchpad")))
+   "Make and reset a Launchpad connected to the first Launchpad MIDI device found."
+   (let [launchpad
+         (new-launchpad initial-state (midi/get-receiver "Launchpad"))]
+     (.reset launchpad)
+     launchpad))
   ([^State state device]
-   "Make a model with initial state,
-   connected to the first Launchpad device found."
-   (let [model (Model. (atom state) device)]
-     (.reset model)
-     model)))
+   "Make a Launchpad with given state,
+   connected to the given device. It is not reset."
+   (Launchpad. (atom state) device)))
 
 ;; helpers
 (defn color->velocity

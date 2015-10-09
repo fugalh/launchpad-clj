@@ -14,7 +14,7 @@
 (use-fixtures :each
      (fn [f]
        (do 
-         (def pad (lp/new-model lp/initial-state (new-mock-rx)))
+         (def pad (lp/new-launchpad lp/initial-state (new-mock-rx)))
          (def state (.state pad)))
        (f)))
 
@@ -74,7 +74,7 @@
            (get-in @state [:side y])))))
 
 (deftest reset-is-one-message
-  ;; reset was called implicitly during new-model
+  (.reset pad)
   (is (= 1 (count @(.messages (.device pad))))))
 
 (deftest grid-midi

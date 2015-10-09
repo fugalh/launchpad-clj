@@ -14,7 +14,7 @@ of those and try it, let me know how it goes.
 (require '[launchpad.core :as lp])
 
 ;; Connect to and initialize the Launchpad
-(def pad (lp/new-model))
+(def pad (lp/new-launchpad))
 
 ;; blinkenlights
 (.grid pad [x y] [red green]) ; light a grid button
