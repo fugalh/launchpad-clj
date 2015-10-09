@@ -2,7 +2,7 @@
   (:require midi))
 
 ;; helpers
-(declare color->velocity coord->note make-state)
+(declare color->velocity coord->note)
 
 (defprotocol ModelBehavior
   (reset 
@@ -38,6 +38,11 @@
 ;; In all of the above, the value is a color (2-element vector of red and green
 ;; values, ranging from 0 to 3)
 (defrecord State [grid top side])
+(def initial-state
+  (let [octet (vec (repeat 8 [0 0]))]
+    (State. (vec (repeat 8 octet))
+            octet
+            octet)))
 
 ;; combine the state, the midi device, and the actions on them
 (defrecord Model [state device]
@@ -93,7 +98,7 @@
     (.send (.device this)
            (midi/control-change 0 0)
            -1)
-    (reset! (.state this) (make-state)))
+    (reset! (.state this) initial-state))
 
   (text [this ascii [red green]]
     ;; sysex [F0h] 00h, 20h, 29h, 09h, colour, text ..., [F7h]
@@ -111,20 +116,15 @@
   (stop-text [this]
     (.text this "" [0 0])))
 
-(defn make-state 
-  "Initial state."
-  ([] (State. (vec (repeat 8 (vec (repeat 8 [0 0]))))
-              (vec (repeat 8 [0 0]))
-              (vec (repeat 8 [0 0]))))
-  ([_] (make-state)))
-
-(defn make-model 
-  "Make a model with initial state, connected to the first Launchpad device found."
+(defn new-model 
   ([]
-   (make-model (make-state) (midi/get-receiver "Launchpad")))
-  ([state device]
+   (new-model initial-state (midi/get-receiver "Launchpad")))
+  ([^State state device]
+   "Make a model with initial state,
+   connected to the first Launchpad device found."
    (let [model (Model. (atom state) device)]
-     (.reset model))))
+     (.reset model)
+     model)))
 
 ;; helpers
 (defn color->velocity

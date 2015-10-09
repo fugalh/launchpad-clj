@@ -14,7 +14,7 @@
 (use-fixtures :each
      (fn [f]
        (do 
-         (def pad (lp/->Model (atom (lp/make-state)) (new-mock-rx)))
+         (def pad (lp/new-model lp/initial-state (new-mock-rx)))
          (def state (.state pad)))
        (f)))
 
@@ -36,7 +36,7 @@
   (apply-top f state)
   (apply-side f state))
 
-(deftest make-state
+(deftest initialized
   (apply-all #(is (= [0 0] %)) @state))
 
 (defn rand-button []
@@ -74,12 +74,12 @@
            (get-in @state [:side y])))))
 
 (deftest reset-is-one-message
-  (.reset pad)
+  ;; reset was called implicitly during new-model
   (is (= 1 (count @(.messages (.device pad))))))
 
 (deftest grid-midi
   (.grid pad [3 4] [2 3])
-  (let [m (first @(.messages (.device pad)))]
+  (let [m (last @(.messages (.device pad)))]
     (is (= 0 (.getChannel m)))
     (is (= 0x90 (.getCommand m)))
     (is (= 0x43 (.getData1 m)))
@@ -87,7 +87,7 @@
 
 (deftest top-midi
   (.top pad 2 [0 1])
-  (let [m (first @(.messages (.device pad)))]
+  (let [m (last @(.messages (.device pad)))]
     (is (= 0 (.getChannel m)))
     (is (= 0xb0 (.getCommand m)))
     (is (= 0x6a (.getData1 m)))
@@ -95,7 +95,7 @@
 
 (deftest side-midi
   (.side pad 7 [1 0])
-  (let [m (first @(.messages (.device pad)))]
+  (let [m (last @(.messages (.device pad)))]
     (is (= 0 (.getChannel m)))
     (is (= 0x90 (.getCommand m)))
     (is (= 0x78 (.getData1 m)))
