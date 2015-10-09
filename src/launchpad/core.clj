@@ -48,19 +48,19 @@
   Protocol
   (grid [this [x y] [red green]]
     (-update! this (assoc-in @(.state this)
-                            [:grid x y]
-                            [red green])))
+                             [:grid x y]
+                             [red green])))
 
   (top [this x [red green]]
     (-update! this (assoc-in @(.state this)
-                            [:top x]
-                            [red green])))
+                             [:top x]
+                             [red green])))
 
   (right [this y [red green]]
     (let [state @(.state this)]
       (-update! this (assoc-in state
-                            [:right y]
-                            [red green]))))
+                               [:right y]
+                               [red green]))))
 
   (reset [this]
     (.send (.device this)
@@ -71,11 +71,11 @@
   (text [this ascii [red green]]
     ;; sysex [F0h] 00h, 20h, 29h, 09h, colour, text ..., [F7h]
     (.send
-       (.device this)
-       (midi/sysex (byte-array (concat [0x00 0x20 0x29 0x09]
-                                       [(color->velocity [red green])]
-                                       (.getBytes ascii))))
-       -1))
+     (.device this)
+     (midi/sysex (byte-array (concat [0x00 0x20 0x29 0x09]
+                                     [(color->velocity [red green])]
+                                     (.getBytes ascii))))
+     -1))
 
   (loop-text [this ascii [red green]]
     ;; like text but add 64 to color (i.e. green|0x4, because green gets <<4)
@@ -86,7 +86,8 @@
 
 (defn new-launchpad 
   ([]
-   "Make and reset a Launchpad connected to the first Launchpad MIDI device found."
+   "Make and reset a Launchpad connected to the first
+   Launchpad MIDI device found."
    (let [launchpad
          (new-launchpad initial-state (midi/get-receiver "Launchpad"))]
      (.reset launchpad)
@@ -119,28 +120,29 @@
         dev (.device pad)]
     (dotimes [x 8]
       (dotimes [y 8]
-        ; update the grid
+                                        ; update the grid
         (when (not= (get-in @oldstate [:grid x y])
-                (get-in newstate [:grid x y]))
+                    (get-in newstate [:grid x y]))
           (.send dev
-             (midi/note-on (coord->note [x y])
-                   (color->velocity (get-in newstate
-                                         [:grid x y])))
-             -1)))
-      ; update the top row
+                 (midi/note-on (coord->note [x y])
+                               (color->velocity (get-in newstate
+                                                        [:grid x y])))
+                 -1)))
+                                        ; update the top row
       (when (not= (get-in @oldstate [:top x])
-              (get-in newstate [:top x]))
+                  (get-in newstate [:top x]))
         (.send dev
-           (midi/control-change (+ 0x68 x)
-                 (color->velocity (get-in newstate [:top x])))
-           -1))
-      ; update the right side column
+               (midi/control-change (+ 0x68 x)
+                                    (color->velocity (get-in newstate
+                                                             [:top x])))
+               -1))
+                                        ; update the right side column
       (let [y x]
         (when (not= (get-in @oldstate [:right y])
-                (get-in newstate [:right y]))
+                    (get-in newstate [:right y]))
 
           (.send dev
-             (midi/note-on (coord->note [8 y])
-                   (color->velocity (get-in newstate [:right y])))
-             -1))))
+                 (midi/note-on (coord->note [8 y])
+                               (color->velocity (get-in newstate [:right y])))
+                 -1))))
     (reset! oldstate newstate)))

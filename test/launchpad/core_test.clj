@@ -12,11 +12,11 @@
 (defn new-mock-rx [] (MockRx. (atom [])))
 
 (use-fixtures :each
-     (fn [f]
-       (do 
-         (def pad (lp/new-launchpad lp/initial-state (new-mock-rx)))
-         (def state (.state pad)))
-       (f)))
+  (fn [f]
+    (do 
+      (def pad (lp/new-launchpad lp/initial-state (new-mock-rx)))
+      (def state (.state pad)))
+    (f)))
 
 (defn apply-grid [f state]
   (dotimes [x 8]
