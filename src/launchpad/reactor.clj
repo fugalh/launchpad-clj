@@ -3,13 +3,6 @@
   (:import (javax.sound.midi Receiver Transmitter MidiMessage ShortMessage)))
 
 (defrecord Message [type loc vel])
-(defprotocol Reactor
-  (react [this msg]
-         "React to a Message. Examples:
-         [:grid [x y] velocity]
-         [:top x velocity]
-         [:right y velocity]"))
-
 
 (defn translate-message [msg]
   (when (instance? ShortMessage msg)
@@ -34,11 +27,13 @@
 
           ["mrr" cmd d1 x y t d2]))))
 
-(defn link [^Transmitter source
-            sink]
+(defn link
+  "source: a MIDI Transmitter that will emit MIDI messages
+  sink: a function that accepts a message"
+  [^Transmitter source sink]
   (.setReceiver source
      (reify Receiver
        (close [this])
        (send [this mmsg ts]
          (let [msg (translate-message mmsg)]
-           (when msg (.react sink msg)))))))
+           (when msg (sink msg)))))))
