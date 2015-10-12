@@ -18,35 +18,56 @@
          (drop-last octaves)
          (drop 1 octaves))))
 
+(defn expi
+  "e^(i*x) with kudos to Euler"
+  [x]
+  [(Math/cos x) (Math/sin x)])
+
+(defn +i
+  [[a b] [c d]]
+  [(+ a c) (+ b d)])
+
+(defn -i
+  [[a b] [c d]]
+  [(- a c) (- b d)])
+
+(defn *i
+  [[a b] [c d]]
+  [(- (* a c)
+      (* b d))
+   (- (* a d)
+      (* b c))])
+
+(def twiddle
+  (memoize (fn [k n]
+             (expi (* -2 Math/PI (/ k n))))))
+   
 (defn fft
   "Return the FFT of the input block,
   whose length (N) must be a power of two.
   The result is a seq of [a b] representing
   the complex number (a + bi)"
-  [block]) ; TODO
-
-(defn mdct
-  "The modified discrete cosine transform of the two
-  input blocks, which must both be the same size, and
-  generally would be 'lapped', i.e. last half of the block for
-  this operation becomes the first half of the next.
-
-  This is slow (O(N^2)) but easy to code and does basically
-  the same thing as FFT (maybe a little nicer due to the 
-  lapping consideration)"
-  [xs]
-  (let [N (/ (count xs) 2)
-        pin (/ Math/PI N)]
-    (map (fn [k]
-           (reduce + (map (fn [n]
-                            (* (nth xs k)
-                               (Math/cos
-                                (* pin
-                                   (+ n
-                                      (/ (+ 1 N) 2))
-                                   (+ k (/ 2))))))
-                          (range (* 2 N)))))
-         (range N))))
+  ([block]
+   (let [n (count block)
+         n2 (/ n 2)]
+     (if (= 1 n)
+       [[(first block) 0]]
+       (let [block1 (fft (take-nth 2 block))
+             block2 (fft (take-nth 2 (rest block)))]
+         (concat (map (fn [k x1 x2]
+                        (+i x1
+                            (*i (twiddle k n)
+                                x2)))
+                      (range n2)
+                      block1
+                      block2)
+                 (map (fn [k x1 x2]
+                        (-i x1
+                            (*i (twiddle k n)
+                                x2)))
+                      (range n2)
+                      block1
+                      block2)))))))
 
 (defn magnitude
   [spectrum]
@@ -76,13 +97,11 @@
   [coll]
   (map dBFS coll))
 
-;; a companion to the mdct, length is 2N
 (def mp3-window
-  (let [NN (* 2 N)
-        pi2n (/ Math/PI NN)]
+  (let [pi2n (/ Math/PI N)]
     (map #(Math/sin (* pi2n
                        (+ % (/ 2))))
-         (range NN))))
+         (range N))))
 
 (defn window-by
   [block window]
@@ -90,9 +109,9 @@
 
 (defn open-audio
   []
-  (let [af (AudioFormat. 44100 16 1 true false)
+  (let [af (AudioFormat. 44100 8 1 true false)
         tdl (AudioSystem/getTargetDataLine af)]
-    (.open tdl)
+    (.open tdl af)
     (.start tdl)
     tdl))
 
@@ -105,22 +124,21 @@
 (defn now [] (java.util.Date.))
 (defn wha
   [xs name]
-  (pprint (str (now) ": " name " " (take 3 xs)))
+  (pprint [(now) name (count xs)])
   xs)
 
 ;;; run
 (defn run []
   (let [tdl (open-audio)]
-    (loop [block1 (read-audio tdl N)]
-      (let [block2 (read-audio tdl N)
-            xs (concat block1 block2)
+    (while true
+      (let [xs (read-audio tdl N)
             spectrum (-> xs
                          (window-by mp3-window)
-                         (mdct) ; N wide
+                         (fft) ; N wide
+                         (magnitude)
                          (normalize)
                          (bin-by-octave) ; 11 wide
                          (->dBFS))
             spectrum (take 8 spectrum)]
         ;;(.update pad (render-spectrum spectrum))
-        (wha spectrum "oof")
-        (recur block2)))))
+        (wha spectrum "loop")))))
