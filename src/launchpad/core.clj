@@ -1,103 +1,33 @@
 (ns launchpad.core
-  (:require midi))
+  (:require midi)
+  (:import (javax.sound.midi Receiver
+                             ShortMessage)))
 
-;; helpers
-(declare color->velocity coord->note -update!)
+;;; Helpers
+(defn decode-midi [msg]
+  (when (instance? msg ShortMessage)
+    (case (.getCommand msg)
+      ShortMessage/NOTE_ON
+      (let [note (.getData1 msg)
+            x (bit-and 0xf note)
+            y (/ (- note x) 0x10)
+            vel (.getData2 msg)]
+        (if (= x 8)
+          [:side x vel]
+          (when (<= 0 x 7)
+            [:grid [x y] vel])))
 
-(defprotocol Protocol
-  (reset 
-    [this]
-    "Reset the launchpad and update the state to match.")
-  (grid 
-    [this [x y] [red green]]
-    "Update the grid at (x,y) to have the given color.
-    0-indexing from the top-right.
-    red and green range 0 to 3. Amber is achieved by combining both colors.")
-  (top
-    [this x [red green]]
-    "Update the top row of buttons at x (0-7) to have the given color.")
-  (right
-    [this y [red green]]
-    "Update the right column of buttons at y (0-7) to have the given color.")
-  (text
-    [this ascii [red green]]
-    "Scroll text. Vary the speed by embedding control bytes 1-7 in the string
-    (default speed is 4).")
-  (loop-text
-    [this ascii [red green]]
-    "Scroll text looping, until stop-text")
-  (stop-text [this]))
+      ShortMessage/CONTROL_CHANGE
+      (let [controller (.getData1 msg)
+            value (.getData2 msg)
+            x (- controller 0x68)]
+        (when (<= 0 x 7)
+          [:top x vel])))))
 
-;; grid is a vector of vectors (8x8)
-;; top is an 8-element vector
-;; right is an 8-element vector
-;;
-;; In all of the above, the value is a color (2-element vector of red and green
-;; values, ranging from 0 to 3)
-(defrecord State [grid top right])
+(defn coord->note [[x y]]
+  "Convert the (x,y) coordinate to the appropriate MIDI note"
+  (+ x (* 0x10 y)))
 
-(def initial-state
-  "The quintessentially quiescent Launchpad."
-  (let [octet (vec (repeat 8 [0 0]))]
-    (State. (vec (repeat 8 octet))
-            octet
-            octet)))
-
-;; combine the state, the midi device, and the actions on them
-(defrecord Launchpad [^clojure.lang.Atom state device]
-  Protocol
-  (grid [this [x y] [red green]]
-    (-update! this (assoc-in @(.state this)
-                             [:grid x y]
-                             [red green])))
-
-  (top [this x [red green]]
-    (-update! this (assoc-in @(.state this)
-                             [:top x]
-                             [red green])))
-
-  (right [this y [red green]]
-    (let [state @(.state this)]
-      (-update! this (assoc-in state
-                               [:right y]
-                               [red green]))))
-
-  (reset [this]
-    (.send (.device this)
-           (midi/control-change 0 0)
-           -1)
-    (reset! (.state this) initial-state))
-
-  (text [this ascii [red green]]
-    ;; sysex [F0h] 00h, 20h, 29h, 09h, colour, text ..., [F7h]
-    (.send
-     (.device this)
-     (midi/sysex (byte-array (concat [0x00 0x20 0x29 0x09]
-                                     [(color->velocity [red green])]
-                                     (.getBytes ascii))))
-     -1))
-
-  (loop-text [this ascii [red green]]
-    ;; like text but add 64 to color (i.e. green|0x4, because green gets <<4)
-    (.text this ascii [red (bit-or 0x4 green)]))
-
-  (stop-text [this]
-    (.text this "" [0 0])))
-
-(defn new-launchpad 
-  ([]
-   "Make and reset a Launchpad connected to the first
-   Launchpad MIDI device found."
-   (let [launchpad
-         (new-launchpad initial-state (midi/get-receiver "Launchpad"))]
-     (.reset launchpad)
-     launchpad))
-  ([^State state device]
-   "Make a Launchpad with given state,
-   connected to the given device. It is not reset."
-   (Launchpad. (atom state) device)))
-
-;; helpers
 (defn color->velocity
   "Convert the (red,green) pair to the appropriate MIDI velocity"
   [[red green]]
@@ -105,44 +35,153 @@
           0xC
           (bit-shift-left green 4)))
 
-(defn coord->note [[x y]]
-  "Convert the (x,y) coordinate to the appropriate MIDI note"
-  (+ x
-     (* 0x10 y)))
+(defn encode-midi [what where color]
+  (let [vel (color->velocity color)]
+    (case what
+      :grid
+      (midi/note-on (coord->note where) vel)
+      
+      :side
+      (midi/note-on (coord->note [8 where]) vel)
+      
+      :top
+      (midi/control-change (+ 0x68 where) vel))))
 
-(defn -update!
-  "Update launchpad to pad new state, wholesale."
-  [pad newstate]
-  ;; The Launchpad Mini, and probably therefore the S, updates quickly enough
-  ;; not to warrant double-buffering here, so I haven't implemented it. But if
-  ;; flickering becomes an issue, that's an option.
-  (let [oldstate (.state pad)
-        dev (.device pad)]
-    (dotimes [x 8]
-      (dotimes [y 8]
-                                        ; update the grid
-        (when (not= (get-in @oldstate [:grid x y])
-                    (get-in newstate [:grid x y]))
-          (.send dev
-                 (midi/note-on (coord->note [x y])
-                               (color->velocity (get-in newstate
-                                                        [:grid x y])))
-                 -1)))
-                                        ; update the top row
-      (when (not= (get-in @oldstate [:top x])
-                  (get-in newstate [:top x]))
-        (.send dev
-               (midi/control-change (+ 0x68 x)
-                                    (color->velocity (get-in newstate
-                                                             [:top x])))
-               -1))
-                                        ; update the right side column
-      (let [y x]
-        (when (not= (get-in @oldstate [:right y])
-                    (get-in newstate [:right y]))
+(defn foo [initial f coll]
+  #(reduce f initial coll))
 
-          (.send dev
-                 (midi/note-on (coord->note [8 y])
-                               (color->velocity (get-in newstate [:right y])))
-                 -1))))
-    (reset! oldstate newstate)))
+;; the following docblock is a work in progress. I'm still not happy with how to chain a bunch together. I'm leaning toward making versions of these that are mutating for ILaunchpad, but leaving off the annoying exclamation points... I was excited about -> but in practice the limitations still make it cumbersome.
+
+;;; These state functions all take a GetState thing (e.g. State or Launchpad)
+;;; and return a State. They don't mutate anything or cause any MIDI events.
+;;; protip: use -> or as->;; (.update! pad (as-> pad $
+;;                 ;; light a top button
+;;                 (.top $ 3 [2 1])
+;;                 ;; X marks the spot
+;;                 (reduce #(.grid %1 [%2 %2] [3 0])
+;;                         $
+;;                         (range 8))
+;;                 (reduce #(.grid %1 [%2 (- 7 %2)] [3 0])
+;;                         $
+;;                         (range 8))
+;;                 ;; light a side button
+;;                 (.side $ [0 3])))
+              
+(defn light
+  "Returns a new state with what-where lit with color"
+  [^GetState thing what where color]
+  (let [state (.state thing)]
+  (case what
+    :grid
+    (let [[x y] where]
+      (assoc-in state [:grid x y] color))
+
+    (assoc-in state [what where] color))))
+
+(defn unlight
+  "Returns a new state with what-where unlit"
+  [thing what where]
+  (light what where [0 0]))
+
+(defn grid [thing [x y] [red green]]
+  (light thing :grid [x y] [red green]))
+
+(defn top [thing x [red green]]
+  (light thing :top x [red green]))
+
+(defn side [thing y [red green]]
+  (light thing :side y [red green]))
+
+;;; Protocols
+(defprotocol GetState
+  (state [this]))
+(defprotocol IState
+  "
+  (light [this what where [red green]]
+    "Returns a new state with button what (:grid, :top, or :side)
+    where ([x y], 0-indexed) lit with color [x y]")
+  (unlight [this what where]
+    "Convenience for light with color [0 0]")
+  (react [this f]
+    "Return a new state with the new reactor."))
+
+(defprotocol ILaunchpad
+  (state [this] "Return the state")
+  (update! [this state] "Update and render the state")
+  (reset! [this] "Reset and update state to initial-state"))
+
+;;; Records
+(defrecord State [grid top side reactor]
+  (light [this what where color]
+    (if (= :grid what)
+      (let [[x y] where]
+        (assoc-in [:grid x y] color))
+      (assoc-in [what where] color)))
+  (unlight [this what where]
+    (.light this what where [0 0]))
+  (react [this f]
+    (assoc-in this [:reactor] f)))
+
+(defrecord Launchpad [state midi-in midi-out]
+  State
+  (light [this what where color]
+    (.update! this (.light (.state this) what where color)))
+  (unlight [this what where]
+    (.light this what where [0 0]))
+  ILaunchpad
+  (state [this] @state)
+  
+  (update! [this newstate]
+    ;; The Launchpad Mini, and probably therefore the S, updates quickly
+    ;; enough not to warrant double-buffering here, so I haven't
+    ;; implemented it. But if flickering becomes an issue, that's an option.
+    (let [oldstate state]
+      ;; grid
+      (map (fn [[x y]]
+             (let [old (get-in @oldstate [:grid x y])
+                   new (get-in  newstate [:grid x y])]
+               (when-not (= old new)
+                 (.send midi-out (encode-midi :grid [x y] new) -1))))
+           (range 8)
+           (range 8))
+      ;; top and side
+      (map (fn [what where]
+             (let [old (get-in @oldstate [what where])
+                   new (get-in  newstate [what where])]
+               (when-not (= old new)
+                 (.send midi-out (encode-midi what where new) -1))))
+           [:top :side]
+           (range 8)))
+    (reset! state newstate))
+  (reset! [this]
+    (.send midi-out (midi/control-change 0 0) -1)
+    (reset! state initial-state)))
+
+;;; Factories and Prototypes
+(def initial-state
+  "The quintessentially quiescent Launchpad."
+  (let [black [0 0]
+        row (vec (repeat 8 black))]
+    (map->State {:grid (vec (repeat 8 row))
+                 :top row
+                 :side row
+                 :reactor nil})))
+
+(defn make-launchpad
+  "Make a LaunchpadS corresponding to the last real launchpad device listed
+  in the system. NB On OSX Java has a bug where the list of MIDI devices
+  never changes after the first call, so you may need to restart the JVM
+  after changing MIDI configuration."
+  ([]
+   (make-launchpad initial-state))
+  ([state]
+   (when-let [[midi-in midi-out] (midi/open-device-duplex "Launchpad")
+              lp (LaunchpadS. state midi-in midi-out)]
+     (.setReceiver
+      midi-in
+      (reify javax.sound.midi.Receiver
+        (send [this msg ts]
+          (when-let [reactor reactor
+                     msg (decode-midi msg)]
+            (apply reactor msg)))))
+     lp)))

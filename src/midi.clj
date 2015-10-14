@@ -43,16 +43,21 @@
   [bytes]
   (SysexMessage. 0xf0 (byte-array bytes) (count bytes)))
 
-(defn find-devices
-  "Return the devices whose names match the regex.
-   They may already be open, but this code doesn't open them."
-  [re]
+(defn find-infos
+  "Return the device info for devices whose names match the regex."
+  [pattern]
   (let [infos (MidiSystem/getMidiDeviceInfo)]
-    (map #(MidiSystem/getMidiDevice %)
-         (filter (or
-                  #(re-find (re-pattern re) (.getName %))
-                  #(re-find (re-pattern re) (.getDescription %)))
-                 infos))))
+    (filter #(or (re-find pattern (.getName %))
+                 (re-find pattern (.getDescription %)))
+            infos)))
+  
+(defn get-devices
+  [infos]
+  (map #(MidiSystem/getMidiDevice %) infos))
+
+(defn find-devices
+  [pattern]
+  (get-devices (find-infos pattern)))
 
 (defn get-receiver
   "Return a new opened receiver for the first device whose name matches the
@@ -63,9 +68,15 @@
   (let [devices (find-devices re)
         devices (filter #(not (= 0 (.getMaxReceivers %))) devices)
         device (first devices)]
-    (when (not device)
+    (when-not device
       (throw (MidiUnavailableException.
               (str "No MIDI receiver matching /" re "/"))))
-    (when (not (.isOpen device))
+    (when-not (.isOpen device)
       (.open device))
     (.getReceiver device)))
+
+(defn receives? [dev]
+  (not (zero? (.getMaxReceivers dev))))
+
+(defn transmits? [dev]
+  (not (zero? (.getMaxTransmitters dev))))
