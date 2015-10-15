@@ -137,6 +137,8 @@
     (.update! this (.light (.state this) what where color)))
   (unlight [this what where]
     (.light this what where [0 0]))
+  (react [this f]
+    (.update! this (.react (.state this) f)))
   GetState
   (state [this] @state)
   ILaunchpad  
@@ -174,10 +176,13 @@
   (.setReceiver
    midi-in
    (reify javax.sound.midi.Receiver
+     (close [this])
      (send [this msg ts]
-       (when-let [reactor (.reactor pad)]
-         (when-let [msg (decode-midi msg)]
+       (let [reactor (.reactor (.state pad))
+             msg (decode-midi msg)]
+         (when (and reactor msg)
            (apply reactor msg)))))))
+
 
 (defn make-launchpad
   "Make a LaunchpadS corresponding to the last real launchpad device listed
@@ -193,4 +198,5 @@
      (when-let [pad (Launchpad. (atom state) midi-in midi-out)]
        (do
          (link-midi->pad midi-in pad)
+         (.reset pad)
          pad)))))
