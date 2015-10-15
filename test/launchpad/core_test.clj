@@ -2,101 +2,88 @@
   (:require [clojure.test :refer :all]
             [launchpad.core :as lp]))
 
-(defrecord MockRx [messages]
+(deftest decode-midi-test
+  (testing "grid"
+    (is (= [:grid [2 3] 127]
+           (lp/decode-midi (midi/note-on 0x32 127))))
+    (testing "out of bounds"
+      (is (nil? (lp/decode-midi (midi/note-on 9 127))))
+      (is (nil? (lp/decode-midi (midi/note-on 0x29 127))))))
+  (testing "top"
+    (is (= [:top 4 0]
+           (lp/decode-midi (midi/control-change 0x6c 0))))
+    (testing "out of bounds"
+      (is (nil? (lp/decode-midi (midi/control-change 0x67 0))))
+      (is (nil? (lp/decode-midi (midi/control-change 0x70 0))))))
+  (testing "side"
+    (is (= [:side 7 127]
+           (lp/decode-midi (midi/note-on 0x78 127))))))
+
+(defn midi-eq? [a b]
+  (is (apply = (map (fn [m] [(.getStatus m)
+                             (.getData1 m)
+                             (.getData2 m)])
+                    [a b]))))
+
+(deftest encode-midi-test
+  (testing "grid"
+    (midi-eq? (lp/encode-midi :grid [6 2] [3 0])
+              (midi/note-on 0x26 0xf))
+    (midi-eq? (lp/encode-midi :grid [0 1] [0 3])
+              (midi/note-on 0x10 0x3c))
+    (testing "top"
+      (midi-eq? (lp/encode-midi :top 2 [1 1])
+                (midi/control-change 0x6a 0x1d)))
+    (testing "side"
+      (midi-eq? (lp/encode-midi :side 7 [3 2])
+                (midi/note-on 0x78 0x2f)))))
+
+(deftest state-test
+  (let [x (rand-int 8)
+        y (rand-int 8)
+        red (rand-int 4)
+        green (rand-int 4)
+        coord [x y]
+        color [red green]
+        state (-> lp/initial-state
+                  (.light :grid coord color)
+                  (.light :top x color)
+                  (.light :side y color))]
+    (testing "light"
+      (map #(is (= (get-in state %)))
+           [[:grid x y] [:top x] [:side y]]))
+    (testing "unlight"
+      (let [state (-> state
+                      (.unlight :grid coord)
+                      (.unlight :top x)
+                      (.unlight :side y))]
+        (map #(is (= [0 0] (get-in state %)))
+             [[:grid x y] [:top x] [:side y]])))
+    (testing "react"
+      (let [f (fn [what where val])
+            state (.react state f)]
+        (is (= f (.reactor state)))))
+    (testing "state"
+      (is (= state (.state state))))))
+
+(defrecord MidiThru [receiver]
+  javax.sound.midi.Transmitter
+  (setReceiver [this rx] (reset! receiver rx))
   javax.sound.midi.Receiver
-  (close [this]
-    (swap! messages #(conj % "close"))
-    nil)
-  (send [this msg ts] (swap! messages #(conj % msg))
-    nil))
-(defn new-mock-rx [] (MockRx. (atom [])))
+  (send [this msg ts]
+    (when @receiver
+      (.send @receiver msg ts))))
 
-(use-fixtures :each
-  (fn [f]
-    (do 
-      (def pad (lp/new-launchpad lp/initial-state (new-mock-rx)))
-      (def state (.state pad)))
-    (f)))
-
-(defn apply-grid [f state]
-  (dotimes [x 8]
-    (dotimes [y 8]
-      (f (get-in state [:grid x y])))))
-
-(defn apply-top [f state]
-  (dotimes [x 8]
-    (f (get-in state [:top x]))))
-
-(defn apply-right [f state]
-  (dotimes [x 8]
-    (f (get-in state [:right x]))))
-
-(defn apply-all [f state]
-  (apply-grid f state)
-  (apply-top f state)
-  (apply-right f state))
-
-(deftest initialized
-  (apply-all #(is (= [0 0] %)) @state))
-
-(defn rand-button []
-  {:x (rand-int 8)
-   :y (rand-int 8)
-   :red (rand-int 4)
-   :green (rand-int 4)})
-
-(deftest grid
-  (let [b (rand-button)
-        x (:x b)
-        y (:y b)
-        red (:red b)
-        green (:green b)]
-    (.grid pad [x y] [red green])
-    (is (= [red green]
-           (get-in @state [:grid x y])))))
-
-(deftest top
-  (let [b (rand-button)
-        x (:x b)
-        red (:red b)
-        green (:green b)]
-    (.top pad x [red green])
-    (is (= [red green]
-           (get-in @state [:top x])))))
-
-(deftest right
-  (let [b (rand-button)
-        y (:y b)
-        red (:red b)
-        green (:green b)]
-    (.right pad y [red green])
-    (is (= [red green]
-           (get-in @state [:right y])))))
-
-(deftest reset-is-one-message
-  (.reset pad)
-  (is (= 1 (count @(.messages (.device pad))))))
-
-(deftest grid-midi
-  (.grid pad [3 4] [2 3])
-  (let [m (last @(.messages (.device pad)))]
-    (is (= 0 (.getChannel m)))
-    (is (= 0x90 (.getCommand m)))
-    (is (= 0x43 (.getData1 m)))
-    (is (= 0x3e (.getData2 m)))))
-
-(deftest top-midi
-  (.top pad 2 [0 1])
-  (let [m (last @(.messages (.device pad)))]
-    (is (= 0 (.getChannel m)))
-    (is (= 0xb0 (.getCommand m)))
-    (is (= 0x6a (.getData1 m)))
-    (is (= 0x1c (.getData2 m)))))
-
-(deftest right-midi
-  (.right pad 7 [1 0])
-  (let [m (last @(.messages (.device pad)))]
-    (is (= 0 (.getChannel m)))
-    (is (= 0x90 (.getCommand m)))
-    (is (= 0x78 (.getData1 m)))
-    (is (= 0x0d (.getData2 m)))))
+(defn make-midi-thru []
+  (MidiThru. (atom nil)))
+  
+(deftest link-test
+  (let [msgs (atom [])
+        pad (.react lp/initial-state
+                    (fn [what where val]
+                      (swap! msgs conj [what where val])))
+        midi-thru (make-midi-thru)
+        msg (midi/note-on 0x13 0xf)]
+    (lp/link-midi->pad midi-thru pad)
+    (.send midi-thru msg -1)
+    (is (= [(lp/decode-midi msg)] @msgs))))

@@ -35,8 +35,10 @@
   (ShortMessage. ShortMessage/CONTROL_CHANGE controller value))
 
 ;; TODO look at https://github.com/locurasoft/osxmidi4j which may also fix the
-;; rescan problem? but maybe not a great lib: https://groups.google.com/forum/#!topic/overtone/Q0hLAoOfjEc
-;; might have to implement my own java/coremidi bridge. :-P http://docs.oracle.com/javase/tutorial/sound/SPI-intro.html
+;; rescan problem? but maybe not a great lib:
+;; https://groups.google.com/forum/#!topic/overtone/Q0hLAoOfjEc
+;; might have to implement my own java/coremidi bridge. :-P
+;; http://docs.oracle.com/javase/tutorial/sound/SPI-intro.html
 (defn sysex
   "Make a sysex message (we add status 0xf0 and the terminating 0xf7).
   Looks like this is another thing broken on OSX. :/"
@@ -80,3 +82,17 @@
 
 (defn transmits? [dev]
   (not (zero? (.getMaxTransmitters dev))))
+
+(defn open-device-duplex
+  "Return a pair of [^Transmitter midi-in, ^Receiver midi-out] devices where the name or
+  description matches the given regular expression pattern."
+  [pattern]
+  (let [devices (find-devices (re-pattern pattern))
+        ins (filter #(not= 0 (.getMaxTransmitters %)) devices)
+        outs (filter #(not= 0 (.getMaxReceivers %)) devices)
+        in (last ins)
+        out (last outs)]
+    (when (and in out)
+      (when-not (.isOpen in) (.open in))
+      (when-not (.isOpen out) (.open out))
+      [(.getTransmitter in) (.getReceiver out)])))
