@@ -178,10 +178,17 @@
    (reify javax.sound.midi.Receiver
      (close [this])
      (send [this msg ts]
-       (let [reactor (.reactor (.state pad))
-             msg (decode-midi msg)]
-         (when (and reactor msg)
-           (apply reactor msg)))))))
+       (try
+         (let [state (.state pad)
+               reactor (.reactor state)
+               msg (decode-midi msg)]
+           (when (and reactor msg)
+             (let [newstate (apply reactor state msg)]
+               (when (instance? State newstate)
+                 (.update! pad newstate)))))
+         (catch Exception e
+           (println "Reactor exception: " (.getMessage e))))))))
+             
 
 
 (defn make-launchpad

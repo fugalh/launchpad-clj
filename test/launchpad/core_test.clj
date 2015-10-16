@@ -60,7 +60,7 @@
         (map #(is (= [0 0] (get-in state %)))
              [[:grid x y] [:top x] [:side y]])))
     (testing "react"
-      (let [f (fn [what where val])
+      (let [f (fn [state what where val])
             state (.react state f)]
         (is (= f (.reactor state)))))
     (testing "state"
@@ -80,8 +80,9 @@
 (deftest link-test
   (let [msgs (atom [])
         pad (.react lp/initial-state
-                    (fn [what where val]
-                      (swap! msgs conj [what where val])))
+                    (fn [state what where val]
+                      (swap! msgs conj [what where val])
+                      nil))
         midi-thru (make-midi-thru)
         msg (midi/note-on 0x13 0xf)]
     (lp/link-midi->pad midi-thru pad)
