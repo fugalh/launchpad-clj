@@ -30,9 +30,27 @@ Colors are `[red green]` where `red` and `green` range from
 
 Coordinates are 0-indexed starting from the top-left.
 
+## Advanced Usage
+
 Namespace `launchpad` will get you going, but for full power you'll want to use
 `launchpad.core` and do batch updates of state (much faster - see
 `src/examples/randgrid.clj`.
+
+You can provide a reactor to the Launchpad, which is just a callback that will
+react to button presses, e.g. `[:grid [x y] [r g]]`. If your reactor returns a
+state, the Launchpad will update accordingly. Here's an example sketch, and you
+can see `src/examples/roxanne.clj` for a more complete example.
+
+```clojure
+(defn next-state [state]
+  ...)
+
+(defn my-reactor [state what where velocity]
+  (println [what where velocity])
+  (next-state state))
+
+(.react pad my-reactor)
+```
 
 ## Gotchas
 There is a Java bug on OSX: Java caches the MIDI device list indefinitely. So

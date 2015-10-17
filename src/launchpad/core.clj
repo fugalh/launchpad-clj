@@ -16,7 +16,7 @@
     "Convenience for light with color [0 0]")
   (react [this reactor]
     "Return a new state with the new reactor, which is a function that
-    takes [pad what where velocity]. If it returns an IState, the
+    takes [state what where velocity]. If it returns an IState, the
     Launchpad will update itself accordingly)."))
 
 (defrecord State [grid top side reactor]
