@@ -7,24 +7,22 @@ Tested with a new
 [Launchpad Mini](http://global.novationmusic.com/launch/launchpad-mini) in
 2015, which I understand works the same as a Launchpad S, but smaller. It may
 work for an older model Launchpad too. The new full-size Launchpad and
-Launchpad Pro with RGB colors could probably be made to work, if you're
-interested reach out. 
+Launchpad Pro with RGB colors could probably be made to work, but I don't have
+one to test on so I'm ignoring it. If you're interested and can help test,
+reach out. 
 
 ## Usage
 
 ```clojure
-(require '[launchpad.core :as lp])
-
-;; Connect to and initialize the Launchpad
-(def pad (lp/new-launchpad))
+(require '[launchpad :as lp])
 
 ;; blinkenlights
-(.grid pad [x y] [red green]) ; light a grid button
-(.top pad x [red green])      ; light a top-row button
-(.right pad y [red green])    ; light a right side-column button
+(lp/grid [x y] [red green]) ; light a grid button
+(lp/top x [red green])      ; light a top-row button
+(lp/right y [red green])    ; light a right side-column button
 
 ;; start over
-(.reset pad)
+(lp/reset)
 ```
 
 Colors are `[red green]` where `red` and `green` range from
@@ -32,13 +30,18 @@ Colors are `[red green]` where `red` and `green` range from
 
 Coordinates are 0-indexed starting from the top-left.
 
+Namespace `launchpad` will get you going, but for full power you'll want to use
+`launchpad.core` and do batch updates of state (much faster - see
+`src/examples/randgrid.clj`.
+
 ## Gotchas
 There is a Java bug on OSX: Java caches the MIDI device list indefinitely. So
-you need to have the Launchpad plugged in before starting the program/repl.
+you need to have the Launchpad plugged in before calling `get-launchpad`, else
+you have to restart the JVM.
 
 ## TODO
-This initial release only allows you to send commands to the Launchpad.
-Next up: allow you to respond to button presses by the user!
+Finish examples, and maybe make more (at least Knight Rider).
+Figure out whether we can do piecemeal updates with reasonable performance.
 
 ## License
 

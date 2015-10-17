@@ -1,3 +1,6 @@
+;; Under Construction <img src="construction.gif">
+;; Not up-to-date, pretend it doesn't exist yet.
+
 (ns examples.life
   (:require [launchpad.core :as lp]))
 

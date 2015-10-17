@@ -1,3 +1,6 @@
+;; Under Construction <img src="construction.gif">
+;; Not up-to-date, pretend it doesn't exist yet.
+
 (ns examples.spectrum-analyzer
   (:require [clojure.pprint :refer [pprint]])
   (:import (javax.sound.sampled AudioFormat

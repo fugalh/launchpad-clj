@@ -1,18 +1,16 @@
-; lein run -m launchpad.examples.roxanne
+; lein run -m examples.roxanne
 
-(ns launchpad.examples.roxanne
-  (:require [launchpad.core :as lp])
+(ns examples.roxanne
+  (:require [launchpad :refer [get-launchpad]])
   (:gen-class))
 
 (defn put-on-the-red-light
   [state what where vel]
   (let [red [3 0]]
-    (when (= :grid what)
-      (let [[x y] where]
-        (.light state :grid where red)))))
+        (.light state what where red)))
 
 (defn -main []
-  (let [pad (lp/make-launchpad)
+  (let [pad (get-launchpad)
         red [3 0]]
     (when-not pad
       (throw (RuntimeException. "No Launchpad found")))
