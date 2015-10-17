@@ -68,7 +68,7 @@
     ;; enough not to warrant double-buffering here, so I haven't
     ;; implemented it. But if flickering becomes an issue, that's an
     ;; option.
-    (let [oldstate state
+    (let [oldstate (.state this)
                                         ; Any IState will do.
           newstate (.state newstate)]
       ;; grid
