@@ -30,11 +30,12 @@ Colors are `[red green]` where `red` and `green` range from
 
 Coordinates are 0-indexed starting from the top-left.
 
+There are examples for your perusal in `src/examples`.
+
 ## Advanced Usage
 
 Namespace `launchpad` will get you going, but for full power you'll want to use
-`launchpad.core` and do batch updates of state (much faster - see
-`src/examples/randgrid.clj`.
+`launchpad.core`.
 
 You can provide a reactor to the Launchpad, which is just a callback that will
 react to button presses, e.g. `[:grid [x y] [r g]]`. If your reactor returns a
@@ -59,7 +60,6 @@ you have to restart the JVM.
 
 ## TODO
 Finish examples, and maybe make more (at least Knight Rider).
-Figure out whether we can do piecemeal updates with reasonable performance.
 
 ## License
 
