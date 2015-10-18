@@ -1,10 +1,12 @@
-;; Under Construction <img src="construction.gif">
-;; Not up-to-date, pretend it doesn't exist yet.
-
 (ns examples.spectrum-analyzer
-  (:require [clojure.pprint :refer [pprint]])
+  (:require [clojure.pprint :refer [pprint]]
+            [launchpad.core :as lp])
   (:import (javax.sound.sampled AudioFormat
-                                AudioSystem)))
+                                AudioSystem))
+  (:gen-class))
+
+;;; The FFT stuff. (Could I use a library? Of course, but I hadn't implemented
+;;; an FFT in awhile...)
 
 ;;; 2048 samples gives a bin width
 ;;; and frame rate of a little over 20 Hz
@@ -85,6 +87,13 @@
   (let [n N]
     (map #(/ % n) spectrum)))
 
+(defn normalize-to
+  "Normalize magnitude to the given maximum."
+  [spectrum max-mag]
+  (if (= 0 max-mag)
+    spectrum
+    (map #(/ % max-mag) spectrum)))
+
 (defn bin-by-octave
   [spectrum]
   (let [spectrum (vec spectrum)]
@@ -124,24 +133,33 @@
     (.read tdl buf 0 n)
     (vec buf)))
 
-(defn now [] (java.util.Date.))
-(defn wha
-  [xs name]
-  (pprint [(now) name (count xs)])
-  xs)
+;;; The Launchpad stuff
+(defn render-spectrum
+  "Render the spectrum to a Launchpad"
+  [spectrum]
+  (let [s lp/initial-state
+        db-range 96 ; 16-bit resolution (ignore dithering)
+        spectrum (take 8 spectrum)
+        spectrum (map #(* 8 (/ % db-range)) spectrum)]
+    s))
 
 ;;; run
 (defn run []
-  (let [tdl (open-audio)]
-    (while true
+  (let [tdl (open-audio)
+        pad (lp/get-launchpad)]
+    (loop [max-mag 0]
       (let [xs (read-audio tdl N)
             spectrum (-> xs
                          (window-by mp3-window)
                          (fft) ; N wide
                          (magnitude)
-                         (normalize)
-                         (bin-by-octave) ; 11 wide
-                         (->dBFS))
-            spectrum (take 8 spectrum)]
-        ;;(.update pad (render-spectrum spectrum))
-        (wha spectrum "loop")))))
+                         ;(normalize)
+                         (bin-by-octave)) ; 11 wide
+            max-mag (apply max max-mag spectrum)
+            spectrum (->dBFS (normalize-to spectrum max-mag))]
+        (.render pad (render-spectrum spectrum))
+        (recur max-mag)))))
+
+(defn -main
+  []
+  (run))

@@ -29,13 +29,13 @@
               [xx yy])
          n 0]
     (when-first [[xx yy] neighbors]
-      (recur (rest ns)
+      (recur (rest neighbors)
              (if (and (not= [x y] [xx yy])
                       (< -1 xx 8) ; out of bounds is dead
                       (< -1 yy 8)
                       (alive-in? state [xx yy]))
-               (+ a 1)
-               a)))))
+               (+ n 1)
+               n)))))
   
 (defn tng
   "Life: The Next Generation #pundog"
@@ -63,9 +63,10 @@
 (defn random-cells
   "one in freq cells will be alive (statistically speaking)"
   [freq]
-  (grid-with 8 8 #(if (= 0 (rand-int freq))
-                    alive
-                    dead)))
+  (assoc lp/initial-state :grid
+         (grid-with 8 8 #(if (= 0 (rand-int freq))
+                           alive
+                           dead))))
 
 (defn toggle-cell
   [state where]
@@ -89,7 +90,7 @@
 ;; prepare
 (doto pad
   (.update render-paused)
-  (.update random-cells)
+  (.render (random-cells 5))
   (.react
    (fn [state what where vel]
      (when (not= 0 vel)
@@ -102,6 +103,7 @@
          (toggle-cell state where))))))
 
 ;; run
-(while true
-  (Thread/sleep (/ 1000 update-hz))
-  (when-not @paused (.update pad tng)))
+(defn run []
+  (while true
+    (Thread/sleep (/ 1000 update-hz))
+    (when-not @paused (.update pad tng))))

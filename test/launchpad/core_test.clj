@@ -51,14 +51,14 @@
                   (.light :side y color))]
     (testing "light"
       (map #(is (= (get-in state %)))
-           [[:grid x y] [:top x] [:side y]]))
+           [[:grid [x y]] [:top x] [:side y]]))
     (testing "unlight"
       (let [state (-> state
                       (.unlight :grid coord)
                       (.unlight :top x)
                       (.unlight :side y))]
         (map #(is (= [0 0] (get-in state %)))
-             [[:grid x y] [:top x] [:side y]])))
+             [[:grid [x y]] [:top x] [:side y]])))
     (testing "react"
       (let [f (fn [state what where val])
             state (.react state f)]

@@ -24,31 +24,28 @@
   ;; All of these are pure functions.
   (state [this] this)
   (light [this what where color]
-    (if (= :grid what)
-      (let [[x y] where]
-        (assoc-in this [:grid x y] color))
-      (assoc-in this [what where] color)))
+    (assoc-in this [what where] color))
   (unlight [this what where]
     (.light this what where [0 0]))
   (react [this f]
-    (assoc-in this [:reactor] f)))
+    (assoc this :reactor f)))
 
 (def initial-state
   "The quintessentially quiescent Launchpad."
   (let [black [0 0]
         row (vec (repeat 8 black))]
-    (map->State {:grid (vec (repeat 8 row))
+    (map->State {:grid {} ; [x y] -> [r g]
                  :top row
                  :side row
                  :reactor nil})))
 
 (defprotocol ILaunchpad
-  (update [this state] "Update and render the state")
-  (update-with [this f]
+  (render [this state] "Update and render the new state")
+  (update [this f]
     "Update with a function which takes a Launchpad and returns a State")
   (reset [this]
     "Reset and update state to initial-state. Equivalent to
-    (.update pad initial-state) but more efficient."))
+    (.render pad initial-state) but more efficient."))
 
 (defrecord Launchpad [state midi-in midi-out]
   IState
@@ -56,32 +53,32 @@
   ;; These are not pure, they perform the actions, and they return the
   ;; Launchpad for easy threading (->)
   (light [this what where color]
-    (.update this (.light (.state this) what where color)))
+    (.render this (.light (.state this) what where color)))
   (unlight [this what where]
     (.light this what where [0 0]))
   (react [this f]
-    (.update this (.react (.state this) f)))
+    (swap! state #(assoc % :reactor f)))
   
   ILaunchpad
-  (update [this newstate]
-    ;; The Launchpad Mini, and probably therefore the S, updates quickly
+  (render [this newstate]
+    ;; The Launchpad Mini, and probably therefore the S, renders quickly
     ;; enough not to warrant double-buffering here, so I haven't
     ;; implemented it. But if flickering becomes an issue, that's an
     ;; option.
     (let [oldstate (.state this)
-                                        ; Any IState will do.
+          ;; Any IState will do.
           newstate (.state newstate)]
       ;; grid
       (doall ; because lazy seq
-       (for [x (range 8)
-             y (range 8)]
-         (let [old (get-in oldstate [:grid x y])
-               new (get-in newstate [:grid x y])]
+       (for [what [:grid]
+             where (for [x (range 8) y (range 8)] [x y])]
+         (let [old (get-in oldstate [what where])
+               new (get-in newstate [what where])]
            (when-not (= old new)
-             (.send midi-out (encode-midi :grid [x y] new) -1)))))
+             (.send midi-out (encode-midi what where new) -1)))))
       ;; top and side
       (doall
-       (for [what [:top :side]
+       (for [what [:grid :top :side]
              where (range 8)]
          (let [old (get-in oldstate [what where])
                new (get-in newstate [what where])]
@@ -89,8 +86,8 @@
              (.send midi-out (encode-midi what where new) -1)))))
       (reset! state newstate)
       this))
-  (update-with [this f]
-    (.update this (f this)))
+  (update [this f]
+    (.render this (f (.state this))))
   (reset [this]
     (.send midi-out (midi/control-change 0 0) -1)
     (reset! state initial-state)
@@ -143,7 +140,7 @@
            (when (and reactor msg)
              (let [newstate (apply reactor state msg)]
                (when (instance? State newstate)
-                 (.update pad newstate)))))
+                 (.render pad newstate)))))
          (catch Exception e
            (println "Reactor exception: " (.getMessage e))))))))
 
@@ -158,7 +155,7 @@
 
   instead of
 
-    (.update pad (-> (.state pad)
+    (.render pad (-> (.state pad)
                      (light :grid [x y] [r g])
                      (top x [r g])))
 
@@ -177,7 +174,7 @@
   which have the same effect and are only slightly less efficient than
   bulk-update."
   [state pad]
-  (.update pad (.state state)))
+  (.render pad (.state state)))
 
 (defn decode-midi
   "Decode a MIDI message to [what where velocity]"
