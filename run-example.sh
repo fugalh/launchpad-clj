@@ -10,7 +10,6 @@ function usage {
 test $# -ge 1 || usage
 T=$1
 shift
-pushd $(dirname "$0")
-test -f src/examples/$T.clj || usage
+test -f "$(dirname "$0")/src/examples/$T.clj" || usage
 
 lein run -m examples.$T "$@"
