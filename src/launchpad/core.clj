@@ -207,9 +207,11 @@
 (defn color->velocity
   "Convert the (red,green) pair to the appropriate MIDI velocity"
   [[red green]]
-  (bit-or red
-          0xC
-          (bit-shift-left green 4)))
+  (let [red (if (nil? red) 0 red)
+        green (if (nil? green) 0 green)]
+    (bit-or red
+         0xC
+         (bit-shift-left green 4))))
 
 (defn encode-midi
   "Encode [what where color] as the corresponding MIDI message"

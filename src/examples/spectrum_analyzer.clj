@@ -1,6 +1,5 @@
-(ns examples.spectrum-analyzer
-  (:require [clojure.pprint :refer [pprint]]
-            [launchpad.core :as lp])
+(ns examples.spectrum_analyzer
+  (:require [launchpad.core :as lp])
   (:import (javax.sound.sampled AudioFormat
                                 AudioSystem))
   (:gen-class))
@@ -90,15 +89,15 @@
 (defn normalize-to
   "Normalize magnitude to the given maximum."
   [spectrum max-mag]
-  (if (= 0 max-mag)
+  (if (= 0.0 max-mag)
     spectrum
     (map #(/ % max-mag) spectrum)))
-
+  
 (defn bin-by-octave
   [spectrum]
   (let [spectrum (vec spectrum)]
     (map (fn [[a b]]
-           (reduce + (subvec spectrum a b)))
+           (/ (reduce + (subvec spectrum a b)) (- b a)))
          octave-bins)))
 
 (defn dBFS
@@ -134,26 +133,38 @@
     (vec buf)))
 
 ;;; The Launchpad stuff
+(defn render-column
+  [c dbfs]
+  (let [y (- (int (max -8 dbfs)))]
+    (if (<= 0 y 7)
+      (reduce merge {}
+              (for [yy (range y 8)] {[c yy] [0 3]}))))) ; TODO pretty colors
+        
 (defn render-spectrum
   "Render the spectrum to a Launchpad"
   [spectrum]
   (let [s lp/initial-state
         db-range 96 ; 16-bit resolution (ignore dithering)
-        spectrum (take 8 spectrum)
-        spectrum (map #(* 8 (/ % db-range)) spectrum)]
-    s))
+        ;; but really music is usually only half that dynamic range
+        db-range (/ db-range 2)
+        spectrum (map #(* 8 (/ % db-range)) spectrum)] ; normalize
+    (assoc s :grid
+           (reduce merge {}
+                   (map render-column
+                        (range 8)
+                        spectrum)))))
 
 ;;; run
 (defn run []
   (let [tdl (open-audio)
         pad (lp/get-launchpad)]
+    (.reset pad)
     (loop [max-mag 0]
       (let [xs (read-audio tdl N)
             spectrum (-> xs
                          (window-by mp3-window)
                          (fft) ; N wide
                          (magnitude)
-                         ;(normalize)
                          (bin-by-octave)) ; 11 wide
             max-mag (apply max max-mag spectrum)
             spectrum (->dBFS (normalize-to spectrum max-mag))]
@@ -163,3 +174,7 @@
 (defn -main
   []
   (run))
+
+;;; TODO
+;;; pretty colors and peaks
+;;; dynamic range zoom in/out (/8 or *8)
