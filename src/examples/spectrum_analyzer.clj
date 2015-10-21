@@ -3,6 +3,14 @@
 ;;; bin by octaves, and display octaves 1-8 (which corresponds roughly
 ;;; to the piano keyboard range)
 
+
+;;; OSX users: you can hear and watch at the same time without using the lame
+;;; webcam mic, if you want. Get soundflower, make a multi-output device in Audio
+;;; Midi Setup that combines both soundflower 2ch and built-in output, and set the
+;;; default input to soundflower 2ch, and the default output to the multi-output
+;;; device. Then start the spectrum analyzer and you should see and hear your
+;;; music.
+
 (ns examples.spectrum_analyzer
   (:require [launchpad.core :as lp])
   (:import (javax.sound.sampled AudioFormat
@@ -58,7 +66,7 @@
   "FFT twiddle factors"
   (memoize (fn [k n]
              (expi (* -2 Math/PI (/ k n))))))
-   
+
 (defn fft
   "Return the FFT of the input block, whose length (N) must be a power
   of two. The resulting sequence is complex."
@@ -115,12 +123,11 @@
   [coll]
   (map dBFS coll))
 
-(def hann-window
-  (memoize
-   (fn [n]
-     (let [k #(Math/sin (/ (* Math/PI %)
-                           (dec n)))]
-       (map k (range n))))))
+(defn calculate-hann-window
+  [n]
+  (map #(Math/sin (/ (* Math/PI %)
+                     (dec n)))
+       (range n)))
 
 (defn window-by
   [block window]
@@ -128,17 +135,30 @@
 
 (defn open-audio
   []
-  (let [af (AudioFormat. 44100 8 1 true false)
+  (let [rate 44100
+        bits 16
+        channels 1
+        signed true
+        bigendian false
+        af (AudioFormat. rate bits channels signed bigendian)
         tdl (AudioSystem/getTargetDataLine af)]
     (.open tdl af)
     (.start tdl)
     tdl))
 
+(defn bytes-to-shorts
+  "little-endian"
+  [bytes]
+  (map #(+ %1 (bit-shift-left %2 8))
+       (take-nth 2 bytes)
+       (take-nth 2 (rest bytes))))
+
 (defn read-audio
   [tdl n]
-  (let [buf (byte-array n)]
+  (let [n (* 2 n) ; 16-bit
+        buf (byte-array n)]
     (.read tdl buf 0 n)
-    (vec buf)))
+    (vec (bytes-to-shorts buf))))
 
 ;;; The Launchpad stuff
 (defn colorize
@@ -154,35 +174,56 @@
     [0 3]] y))
 
 (defn render-column
-  [c dbfs]
-  (let [y (- (int (max -8 dbfs)))]
-    (if (<= 0 y 7)
+  "h is height [0.0-1.0), we will flip and scale it"
+  [x h]
+  (let [y (max h 0.0) ; avoid -Infinity
+        y (int (* 8 y)) ; scale
+        y (- 8 y)] ; flip
+    (when (<= 0 y 7)
       (reduce merge {}
-              (for [yy (range y 8)] {[c yy]
-                                     (colorize c yy)})))))
-        
+              (for [yy (range y 8)] {[x yy]
+                                     (colorize x yy)})))))
+
 (defn render-spectrum
-  "Render the spectrum to a Launchpad state"
+  "Render the spectrum [0.0-1.0) to a Launchpad state"
   [spectrum]
-  (let [s lp/initial-state
-        db-range 96 ; 16-bit resolution (ignore dithering)
-        ;; but really music is usually only about half that dynamic range
-        db-range 50
-        ;; map the dynamic range to the 8-high grid
-        spectrum (map #(* 8 (/ % db-range)) spectrum)]
-    (assoc s :grid
-           (reduce merge {}
-                   (map render-column
-                        (range 8)
-                        spectrum)))))
+  (assoc lp/initial-state :grid
+         (reduce merge {}
+                 (map render-column
+                      (range 8)
+                      spectrum))))
+
+(defn render-spectrum-db
+  "Render spectrum [0.0-1.0) with decibel scale"
+  [spectrum]
+  (let [db-range 96 ; 16-bit resolution (ignore dithering)
+        db-range 48 ; in practice this is enough, even for soft jazz
+        spectrum (->> spectrum
+                      ;; convert to decibels
+                      (->dBFS)
+                      ;; scale and shift the range we want to [0.0-1.0)
+                      (map #(+ 1.0 (/ % db-range))))]
+    (render-spectrum spectrum)))
+
+(defn render-spectrum-linear
+  "Render spectrum [0.0-1.0) with linear scale"
+  [spectrum]
+  (render-spectrum spectrum))
+
 
 ;;; run
-(defn run []
+(defn run
+  [kind]
   (let [tdl (open-audio)
-        pad (lp/get-launchpad)]
+        pad (lp/get-launchpad)
+        hann-window (calculate-hann-window N)
+        render-fn (get {:db render-spectrum-db
+                        :linear render-spectrum-linear}
+                       kind
+                       render-spectrum-db)]
     (.reset pad)
     ;; We adapt the range of the spectrum by the maximum observed
-    ;; magnitude and the dynamic range (in render-spectrum). In this
+    ;; magnitude and the dynamic range (in render-spectrum-db). In this
     ;; way we completely punt on the question of "what does it mean to
     ;; normalize an FFT?", and it's pretty much self-adjusting.
     ;;
@@ -192,21 +233,21 @@
       (let [xs2 (read-audio tdl (/ N 2))
             xs (concat xs1 xs2)
             spectrum (-> xs
-                         (window-by (hann-window N))
+                         (window-by hann-window)
                          (fft) ; N wide
                          (magnitude)
                          (bin-by-octave)) ; 11 wide
-            max-mag (apply max max-mag spectrum)
-            spectrum (normalize-to spectrum max-mag)
-            spectrum (->dBFS spectrum)]
-        (.render pad (render-spectrum spectrum))
+            max-mag (max max-mag (reduce max spectrum))
+            spectrum (normalize-to spectrum max-mag)]
+        (.render pad (render-fn spectrum))
         (recur max-mag xs2)))))
 
 (defn -main
-  []
-  (run))
+  ([]
+   (run :db))
+  ([kind]
+   (run (keyword kind))))
 
 ;;; TODO
-;;; looks like double-buffering might help smooth display
 ;;; falling peaks
 ;;; dynamic range zoom in/out (/8 or *8)

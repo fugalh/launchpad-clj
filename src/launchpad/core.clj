@@ -1,3 +1,4 @@
+
 (ns launchpad.core
   (:refer-clojure :exclude [update])
   (:require midi)
@@ -61,13 +62,12 @@
   
   ILaunchpad
   (render [this newstate]
-    ;; The Launchpad Mini, and probably therefore the S, renders quickly
-    ;; enough not to warrant double-buffering here, so I haven't
-    ;; implemented it. But if flickering becomes an issue, that's an
-    ;; option.
     (let [oldstate (.state this)
           ;; Any IState will do.
           newstate (.state newstate)]
+      ;; We do double buffering for the smoothest updates
+      ;; display 0, write 1, copy 0 to 1
+      (.send midi-out (midi/control-change 0 0x34) -1)
       ;; grid
       (doall ; because lazy seq
        (for [what [:grid]
@@ -84,6 +84,10 @@
                new (get-in newstate [what where])]
            (when-not (= old new)
              (.send midi-out (encode-midi what where new) -1)))))
+      ;; display 1, write 0, copy 1 to 0
+      (.send midi-out (midi/control-change 0 0x31) -1)
+      ;; display and write 0
+      (.send midi-out (midi/control-change 0 0x20) -1)
       (reset! state newstate)
       this))
   (update [this f]
